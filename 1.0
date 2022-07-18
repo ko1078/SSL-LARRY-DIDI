@@ -1,0 +1,286 @@
+//+------------------------------------------------------------------+
+//|                                                     SSL DIDI.mq4 |
+//|                        Copyright 2022, MetaQuotes Software Corp. |
+//|                                             https://www.mql5.com |
+//+------------------------------------------------------------------+
+#property copyright "Copyright 2022, George Gehring and 2nd Amendment Supply LLC"
+#property link      "https://www.ggehring.com"
+#property version   "1.00"
+#property strict
+
+extern double lotSize = .01;
+
+ 
+int direction=0; // direction of current trade 0 is buy 1 is sell
+int ticket; // ticket of current open order
+double orderPrice; //open price of current order
+double TakeProfitPrice;
+double stopLoss;
+int StartHour = 02; //the hour that its allowed to start trading 7pm
+int LastHour = 23; //the hour that it cannot trade after 4pm
+extern double StoplossMultiplier = 1.5; 
+string TS = "";
+datetime LastActionTime;
+double openOrders;
+int ticket1;
+int ticket2;
+int ticket3;
+int ticket4;
+
+//ATR
+extern int PeriodsATR =14;
+extern int ATRBackoff =1;
+
+
+//SSL Channel Chart Alert
+
+extern int Lb=10;
+extern bool alertsOn=false;
+extern bool alertsMessage=false;
+extern bool alertsSound=false;
+extern bool alertsEmail=false;
+string SSL = "";
+
+
+string OperationsAllowed = "";
+
+// Larry
+extern int Length=8;
+string Larry = "";
+
+
+// DIDI Indicator
+extern int Curta=3;
+extern ENUM_APPLIED_PRICE CurtaAppliedPrice = PRICE_CLOSE;
+extern ENUM_MA_METHOD CurtaMethod = MODE_SMA;
+
+extern int Media=8;
+extern ENUM_APPLIED_PRICE MediaAppliedPrice = PRICE_CLOSE;
+extern ENUM_MA_METHOD MediaMethod = MODE_SMA;
+
+extern int Longa=20;
+extern ENUM_APPLIED_PRICE LongaAppliedPrice = PRICE_CLOSE;
+extern ENUM_MA_METHOD LongaMethod = MODE_SMA;
+string DIDI = "";
+// Heikin Ashi Histogram 
+extern int AvPeriod = 6;
+string HAHist = "";
+
+//MACD
+extern int macdSmall = 12;
+extern int macdLarge = 26;
+extern int macdSignal = 9;
+string MACD = "";
+
+
+//Baseline
+extern int baselinema = 150;
+string baseline = "";
+
+//Bollinger Bands
+
+extern int BandsPeriod = 200;          //Period of the Bollinger Bands
+extern double BandsDeviation = 2;      //Deviation of the Bollinger Bands
+bool BandsBreakUp=false;
+bool BandsBreakDown=false;
+extern int BandsShift = 0;
+
+
+
+void OnTick()
+  {
+  
+
+  
+  BandsBreakUp=false;
+   BandsBreakDown=false;
+   double BandsTopCurr=iBands(Symbol(),0,BandsPeriod,BandsDeviation,0,PRICE_CLOSE,MODE_UPPER,BandsShift+0);
+   double BandsLowCurr=iBands(Symbol(),0,BandsPeriod,BandsDeviation,0,PRICE_CLOSE,MODE_LOWER,BandsShift+0);
+   double BandsTopPrev=iBands(Symbol(),0,BandsPeriod,BandsDeviation,0,PRICE_CLOSE,MODE_UPPER,BandsShift+1);
+   double BandsLowPrev=iBands(Symbol(),0,BandsPeriod,BandsDeviation,0,PRICE_CLOSE,MODE_LOWER,BandsShift+1);
+   if(Close[1]<BandsTopPrev && Close[0]>BandsTopCurr) BandsBreakUp=true;
+   if(Close[1]>BandsLowPrev && Close[0]<BandsLowCurr) BandsBreakDown=true;
+  
+
+  
+  
+  
+  //sets open orders quantity to 0 and then checks for open orders in this currency
+  openOrders = 0; 
+   
+  for( int i = 0 ; i < OrdersTotal() ; i++ ) { 
+                // We select the order of index i selecting by position and from the pool of market/pending trades.
+                OrderSelect( i, SELECT_BY_POS, MODE_TRADES ); 
+                // If the pair of the order is equal to the pair where the EA is running.
+                if (OrderSymbol() == Symbol())
+                { 
+                openOrders = 1;
+                }
+        } 
+  
+ // run indicators
+ 
+ // ATR
+ double atr1 = iATR(NULL, 0, PeriodsATR, ATRBackoff);
+ 
+ // ssl last candle
+double SSL1=iCustom(Symbol(),0,"SSL_channel_chart",Lb,alertsOn,alertsMessage,alertsSound,alertsEmail,0,1);
+double SSL2=iCustom(Symbol(),0,"SSL_channel_chart",Lb,alertsOn,alertsMessage,alertsSound,alertsEmail,1,1);
+
+if(SSL1<SSL2) SSL="buy";
+if(SSL1>SSL2) SSL="sell";
+ 
+ 
+
+
+
+
+     
+  
+// MACD 
+
+double MacdCurrent = iMACD(Symbol(),0,macdSmall,macdLarge,macdSignal,PRICE_CLOSE,MODE_MAIN,1);        
+double MacdLast = iMACD(Symbol(),0,macdSmall,macdLarge,macdSignal,PRICE_CLOSE,MODE_MAIN,2); 
+double signalCurrent = iMACD(Symbol(),0,macdSmall,macdLarge,macdSignal,PRICE_CLOSE,MODE_SIGNAL,1);
+if (MacdCurrent>MacdLast) 
+        {
+            MACD = "buy";
+        }       
+else if (MacdCurrent < MacdLast) 
+        {
+            MACD = "sell";
+        }   
+
+
+
+// MACD baseline 
+
+
+if (MacdCurrent >signalCurrent)
+        {
+            baseline = "buy";
+        }
+
+if(MacdCurrent<signalCurrent)
+        {
+            baseline = "sell";
+
+        } 
+
+
+if(openOrders==1)
+{
+if (direction == 1) {//check to close any open buy order
+if (
+   SSL      == "sell"
+|| MACD     == "sell"
+|| baseline == "sell"
+) {OrderClose(ticket1,lotSize,Bid,5,Red);GetLastError();
+OrderClose(ticket2,lotSize,Bid,5,Red); 
+      }
+    
+     }
+
+
+
+if (direction == 2) {//check to close any open sell order
+if (
+   SSL      == "buy"
+|| MACD     == "buy"
+|| baseline == "buy"
+) { OrderClose(ticket3,lotSize,Ask,5,Green);GetLastError();
+OrderClose(ticket4,lotSize,Ask,5,Red); 
+      }
+    
+     }
+
+
+
+}
+
+
+
+
+   
+  
+  
+    //start of placing trades only runs once per bar      
+    if (LastActionTime != Time[0])
+   {
+   
+   
+ //if no orders are open check to see if the indicators have been ran this bar 
+  
+ if (openOrders == 0 ){ 
+ 
+ // DIDI indicator 
+     
+double DIDI2=iCustom(Symbol(),0,"Didi_Index",Curta,CurtaAppliedPrice,CurtaMethod,Media,MediaAppliedPrice,MediaMethod,Longa,LongaAppliedPrice,LongaMethod,1,1); //Flat
+double DIDI3=iCustom(Symbol(),0,"Didi_Index",Curta,CurtaAppliedPrice,CurtaMethod,Media,MediaAppliedPrice,MediaMethod,Longa,LongaAppliedPrice,LongaMethod,2,1);  //Long
+
+if(DIDI3>DIDI2) 
+{DIDI= "buy";}
+else if (DIDI3<DIDI2){ DIDI= "sell";}
+else DIDI = "NoTrade";
+
+      
+double larry=iCustom(Symbol(),0,"LWPI",Length,0,1);
+if (larry>50)Larry = "sell";
+if (larry<50)Larry = "buy";
+ 
+ 
+ // Heikin Ashi Histogram
+double HAHist1=iCustom(Symbol(),0,"HeikenAshiHistogram",AvPeriod,0,1);  //Long
+double HAHist2=iCustom(Symbol(),0,"HeikenAshiHistogram",AvPeriod,1,1);  //Short
+double HAHist3=iCustom(Symbol(),0,"HeikenAshiHistogram",AvPeriod,2,1);  //MA
+if (HAHist1>HAHist3) 
+        {
+            HAHist = "buy";
+        }       
+else if (HAHist2 > HAHist3) 
+        {
+            HAHist = "sell";
+        } 
+else HAHist = "NoTrade" ; 
+
+
+ 
+ if (
+   SSL      == "buy"
+&& MACD     == "buy"
+&& DIDI     == "buy"
+&& HAHist   == "buy"
+&& baseline == "buy"
+&& Larry    == "buy"
+
+)
+{
+
+ ticket1 =  OrderSend (_Symbol,OP_BUY,lotSize,Ask,5,atr1*StoplossMultiplier*_Point,atr1*_Point,NULL,0,0,Green);
+ ticket2 = OrderSend (_Symbol,OP_BUY,lotSize,Ask,5,atr1*StoplossMultiplier*_Point,0,NULL,0,0,Green);
+
+GetLastError();
+direction = 1;
+}
+
+if (
+   SSL      == "sell"
+&& MACD     == "sell"
+&& DIDI     == "sell"
+&& HAHist   == "sell"
+&& baseline == "sell"
+&& Larry    == "sell"
+) 
+ {
+ 
+ ticket3 = OrderSend (_Symbol,OP_SELL,lotSize,Bid,5,atr1*StoplossMultiplier*_Point,atr1*_Point,NULL,0,0,Red);
+ ticket4 = OrderSend (_Symbol,OP_SELL,lotSize,Bid,5,atr1*StoplossMultiplier*_Point,0,NULL,0,0,Red);
+
+
+ GetLastError();
+ direction = 2;
+ }
+ 
+ 
+ }LastActionTime = Time[0];}
+  }
